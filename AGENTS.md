@@ -71,6 +71,11 @@ deliberately broken class with `ClassWriter` + a `POP` on an empty stack, becaus
 byte-level corruption usually fails at parse time instead of reaching
 `CheckClassAdapter`.
 
+`JarRuntimeEquivalenceTests` extracts the original and obfuscated fixture JARs to
+temp directories and runs them with a real JVM (`java.home/bin/java` via
+`ProcessBuilder`), comparing stdout. That is the only test that proves runtime
+equivalence; every other check is structural.
+
 ## Testing a multipart endpoint locally
 
 Windows PowerShell 5.1 is the shell here and its `Invoke-WebRequest` has **no
@@ -99,10 +104,12 @@ dependencies pointing inward: `api` → `application` → `engine` → `domain`.
 
 `TransformationStep` (`domain/TransformationStep.java`) is the contract.
 `MethodRenamingStep` (`engine/jvm/`) is the only implementation, and it
-supports `JVM_CLASS` only. Consequences:
+supports `JVM_CLASS` and `JAR`. Consequences:
 
-- A `JVM_CLASS` request with no `steps` parameter now runs `method-renaming`;
-  other formats still resolve to an empty pipeline.
+- A `JVM_CLASS` or `JAR` request with no `steps` parameter now runs
+  `method-renaming`; other formats still resolve to an empty pipeline.
+- For a `JAR`, the step delegates to `JarArchive`, which applies the same
+  renaming to every `.class` entry while copying everything else through.
 - `StepRegistry` filters by `supports()` format and orders by `order()`; an
   empty `steps` list means "all registered steps", not "no steps".
 - Functionality status is set by the step, via
@@ -126,9 +133,36 @@ private-only restriction without that analysis — the restriction *is* the
 soundness argument.
 
 Keep the engine Spring-free: `MethodRenaming`, `NameAllocator`, `KeepNames`,
-and `ClassStructureVerifier` must not import Spring. Only the thin
+`ClassStructureVerifier`, and `JarArchive` must not import Spring. Only the thin
 `*Step` adapters carry `@Component`, and they construct the collaborators in
 their no-arg constructor rather than being component-scanned.
+
+## JAR handling — read before touching archive code
+
+`JarArchive` (`engine/jvm/JarArchive.java`) is Spring-free and rewrites a JAR
+entry by entry. Rules that are easy to get wrong:
+
+- **A ZIP signature is not proof of integrity.** `requireReadableZip(...)`
+  checks the local-file-header magic *and* that an end-of-central-directory
+  record exists near the tail, so a truncated archive is rejected instead of
+  being silently mangled. `ZipInputStream` alone reads a truncated archive from
+  its local headers and never notices the missing central directory.
+- **Duplicate entry names are rejected.** `ZipOutputStream` refuses them, so a
+  duplicate would otherwise surface as a write failure part-way through.
+- **Signed JARs are rejected** (any `META-INF/*.SF|.RSA|.DSA|.EC`,
+  case-insensitive) because rewriting any entry invalidates the signature.
+- **Per-entry failure isolation.** A `.class` entry that cannot be transformed
+  keeps its original bytes and is reported `skipped`; the archive is still
+  produced. `Outcome.skipped` is distinct from `changed=false`, which means the
+  class legitimately had nothing to rename.
+- **`STORED` entries must carry size and CRC** when written to a
+  `JarOutputStream`, or `putNextEntry` throws. `write(...)` sets them.
+- **Status is aggregated, never assumed.** The step reports `VERIFIED` only when
+  at least one class changed and none were skipped; otherwise `UNVERIFIED`, with
+  the skipped entry names in the detail.
+- **`keepMethods` is not exposed over HTTP.** The controller passes `Map.of()`
+  for options (`ObfuscationController`), so a REST caller cannot set keep rules.
+  The step contract supports it and tests cover it.
 
 ## Invariants that are easy to break
 

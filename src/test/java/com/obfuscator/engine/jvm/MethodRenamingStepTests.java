@@ -30,7 +30,7 @@ class MethodRenamingStepTests {
     @Test
     void isDiscoverableByTheRegistryContract() {
         assertThat(step.id()).isEqualTo("method-renaming");
-        assertThat(step.supports()).containsExactly(ArtifactFormat.JVM_CLASS);
+        assertThat(step.supports()).containsExactlyInAnyOrder(ArtifactFormat.JVM_CLASS, ArtifactFormat.JAR);
         assertThat(step.order()).isPositive();
     }
 
@@ -56,8 +56,8 @@ class MethodRenamingStepTests {
     }
 
     @Test
-    void doesNotApplyToJarFormat() {
-        assertThat(step.supports()).doesNotContain(ArtifactFormat.JAR, ArtifactFormat.NATIVE);
+    void doesNotApplyToNativeFormat() {
+        assertThat(step.supports()).doesNotContain(ArtifactFormat.NATIVE);
     }
 
     private TransformationContext context(Map<String, String> options) {

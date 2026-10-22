@@ -1,0 +1,16 @@
+obfuscator:
+  max-input-bytes: 67108864
+  max-archive-entry-bytes: 33554432
+  max-archive-expanded-bytes: 268435456
+
+spring:
+  application:
+    name: obfuscator
+  servlet:
+    multipart:
+      max-file-size: 64MB
+      # 64 MB file plus room for multipart framing and small text parts.
+      max-request-size: 65MB
+
+server:
+  port: 8080

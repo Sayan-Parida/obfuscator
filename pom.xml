@@ -14,66 +14,22 @@
     <groupId>com.obfuscator</groupId>
     <artifactId>obfuscator</artifactId>
     <version>0.1.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
     <name>obfuscator</name>
-    <description>Orchestration layer for function-preserving binary obfuscation</description>
+    <description>Function-preserving JVM bytecode obfuscation: core engine, web API and CLI</description>
+
+    <modules>
+        <module>obfuscator-core</module>
+        <module>obfuscator-web</module>
+        <module>obfuscator-cli</module>
+    </modules>
 
     <properties>
         <java.version>17</java.version>
         <!-- Not managed by spring-boot-dependencies, so it is pinned here.
              Use org.ow2.asm, never Spring's repackaged org.springframework.asm. -->
         <asm.version>9.10.1</asm.version>
+        <!-- Not managed by spring-boot-dependencies: the CLI parser. -->
+        <picocli.version>4.7.7</picocli.version>
     </properties>
-
-    <dependencies>
-        <dependency>
-            <groupId>org.ow2.asm</groupId>
-            <artifactId>asm</artifactId>
-            <version>${asm.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>org.ow2.asm</groupId>
-            <artifactId>asm-commons</artifactId>
-            <version>${asm.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>org.ow2.asm</groupId>
-            <artifactId>asm-util</artifactId>
-            <version>${asm.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>org.ow2.asm</groupId>
-            <artifactId>asm-analysis</artifactId>
-            <version>${asm.version}</version>
-        </dependency>
-
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-web</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-validation</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-configuration-processor</artifactId>
-            <optional>true</optional>
-        </dependency>
-
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-test</artifactId>
-            <scope>test</scope>
-        </dependency>
-    </dependencies>
-
-    <build>
-        <plugins>
-            <plugin>
-                <groupId>org.springframework.boot</groupId>
-                <artifactId>spring-boot-maven-plugin</artifactId>
-            </plugin>
-        </plugins>
-    </build>
-
 </project>

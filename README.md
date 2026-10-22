@@ -22,6 +22,7 @@ mvn spring-boot:run   # dev server on http://localhost:8080
 | `file`       | yes      | –          | the binary to obfuscate      |
 | `format`     | no       | `JVM_CLASS`| `JVM_CLASS`, `JAR`, `NATIVE` |
 | `steps`      | no       | empty      | repeatable step id           |
+| `keepMethods`| no       | empty      | repeatable rules preserving private methods (`Name` or `Owner#method`) |
 
 The response carries the transformed artifact base64-encoded, its SHA-256, the
 steps that actually ran, and a functionality status.
@@ -95,11 +96,9 @@ Not implemented:
 
 - **Reflection by name.** Private method names are mangled, so anything that
   resolves them reflectively — `getDeclaredMethod("computeTotal")`,
-  `MethodHandles`, `setAccessible` on a private member — breaks. Use
-  `keepMethods` for those names. This is the main behavioural risk.
-- **`keepMethods` is not exposed over HTTP yet.** It works through the step
-  contract and is covered by tests, but the controller currently sends no
-  options, so a REST caller cannot set it.
+  `MethodHandles`, `setAccessible` on a private member — breaks. Pass those
+  names as `keepMethods` (a repeatable request parameter, `Name` or
+  `Owner#method`). This is the main behavioural risk.
 - **`VERIFIED` is structural, not empirical.** It proves valid bytecode and that
   only names changed. Runtime equivalence is proven by a test that executes the
   original and obfuscated JARs side by side, not by the API response.

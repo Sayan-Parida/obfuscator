@@ -1,5 +1,6 @@
 package com.obfuscator.engine.jvm;
 
+import com.obfuscator.domain.ObfuscationException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -40,17 +41,34 @@ public final class KeepNames {
                 if (trimmed.isEmpty()) {
                     continue;
                 }
+                if (!trimmed.matches("\\S+")) {
+                    throw invalid(trimmed);
+                }
                 int separator = trimmed.indexOf('#');
+                int lastSeparator = trimmed.lastIndexOf('#');
+                if (separator != lastSeparator) {
+                    throw invalid(trimmed);
+                }
                 if (separator < 0) {
                     bare.add(trimmed);
                 } else {
+                    String owner = trimmed.substring(0, separator).trim();
+                    String method = trimmed.substring(separator + 1).trim();
+                    if (owner.isEmpty() || method.isEmpty()) {
+                        throw invalid(trimmed);
+                    }
                     qualified.add(new Qualified(
-                            internalName(trimmed.substring(0, separator).trim()),
-                            trimmed.substring(separator + 1).trim()));
+                            internalName(owner),
+                            method));
                 }
             }
         }
         return new KeepNames(bare, qualified);
+    }
+
+    private static ObfuscationException invalid(String token) {
+        return new ObfuscationException(
+                "invalid keepMethods rule: '" + token + "' (expected a method name or Owner#method)");
     }
 
     /** Parses a single option value, which may itself contain separators. */

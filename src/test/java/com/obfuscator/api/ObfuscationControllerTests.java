@@ -116,6 +116,20 @@ class ObfuscationControllerTests {
             }
             """;
 
+    private static final String JAR_HELPER_SOURCE = """
+            package demo;
+
+            public class Helper {
+                public static int work(int value) {
+                    return helper(value);
+                }
+
+                private static int helper(int value) {
+                    return value + 1;
+                }
+            }
+            """;
+
     @Test
     void obfuscatesAJarAndPreservesResources() throws Exception {
         byte[] jar = jarOf(
@@ -350,5 +364,92 @@ class ObfuscationControllerTests {
 
     private static String headerOf(MvcResult result, String name) {
         return result.getResponse().getHeader(name);
+    }
+
+    @Test
+    void keepsRequestedMethodsThroughTheJsonEndpoint() throws Exception {
+        byte[] compiled = TestClasses.compile(SUBJECT, SOURCE);
+        MockMultipartFile file = new MockMultipartFile("file", "Controller.class", null, compiled);
+
+        String json = mvc.perform(multipart("/api/v1/obfuscations").file(file)
+                        .param("format", "JVM_CLASS")
+                        .param("keepMethods", "com.example.Controller#inner")
+                        .param("keepMethods", "discardedMatchOnly"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.appliedSteps[0]").value("method-renaming"))
+                .andExpect(jsonPath("$.functionalityStatus").value("VERIFIED"))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        assertThat(Base64.getDecoder().decode(extractBase64(json, "outputBase64"))).isEqualTo(compiled);
+    }
+
+    @Test
+    void keepsRequestedMethodsThroughTheDownloadEndpoint() throws Exception {
+        byte[] compiled = TestClasses.compile(SUBJECT, SOURCE);
+        MockMultipartFile file = new MockMultipartFile("file", "Controller.class", null, compiled);
+
+        MvcResult result = mvc
+                .perform(multipart("/api/v1/obfuscations/download").file(file)
+                        .param("format", "JVM_CLASS")
+                        .param("keepMethods", "inner"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("X-Functionality-Status", "VERIFIED"))
+                .andExpect(header().string("X-Sha256", sha256(compiled)))
+                .andReturn();
+
+        assertThat(TestClasses.methodNames(result.getResponse().getContentAsByteArray())).contains("inner");
+    }
+
+    @Test
+    void appliesScopedKeepRulesToEveryClassInAJar() throws Exception {
+        byte[] jar = jarOf(
+                entry("META-INF/MANIFEST.MF", "Manifest-Version: 1.0\r\n"),
+                entry("demo/Main.class", TestClasses.compile("demo.Main", JAR_MAIN_SOURCE)),
+                entry("demo/Helper.class", TestClasses.compile("demo.Helper", JAR_HELPER_SOURCE)));
+        MockMultipartFile file = new MockMultipartFile("file", "app.jar", "application/java-archive", jar);
+
+        MvcResult result = mvc
+                .perform(multipart("/api/v1/obfuscations/download").file(file)
+                        .param("format", "JAR")
+                        .param("keepMethods", "demo.Main#computeTotal"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("X-Functionality-Status", "VERIFIED"))
+                .andReturn();
+
+        Map<String, byte[]> entries = readEntries(result.getResponse().getContentAsByteArray());
+        assertThat(TestClasses.methodNames(entries.get("demo/Main.class"))).contains("computeTotal");
+        assertThat(TestClasses.methodNames(entries.get("demo/Helper.class"))).doesNotContain("helper");
+    }
+
+    @Test
+    void rejectsMalformedKeepRulesWithAClearErrorOnBothEndpoints() throws Exception {
+        MockMultipartFile file = new MockMultipartFile(
+                "file", "Controller.class", null, TestClasses.compile(SUBJECT, SOURCE));
+        String detail = "invalid keepMethods rule: '#sum' (expected a method name or Owner#method)";
+
+        mvc.perform(multipart("/api/v1/obfuscations").file(file).param("keepMethods", "#sum"))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.detail").value(detail));
+
+        mvc.perform(multipart("/api/v1/obfuscations/download").file(file).param("keepMethods", "a b"))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.detail")
+                        .value("invalid keepMethods rule: 'a b' (expected a method name or Owner#method)"));
+    }
+
+    @Test
+    void treatsBlankKeepParamsAsNoRules() throws Exception {
+        byte[] compiled = TestClasses.compile(SUBJECT, SOURCE);
+        MockMultipartFile file = new MockMultipartFile("file", "Controller.class", null, compiled);
+
+        String json = mvc.perform(multipart("/api/v1/obfuscations").file(file).param("keepMethods", " "))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        assertThat(Base64.getDecoder().decode(extractBase64(json, "outputBase64"))).isNotEqualTo(compiled);
     }
 }

@@ -160,9 +160,13 @@ entry by entry. Rules that are easy to get wrong:
 - **Status is aggregated, never assumed.** The step reports `VERIFIED` only when
   at least one class changed and none were skipped; otherwise `UNVERIFIED`, with
   the skipped entry names in the detail.
-- **`keepMethods` is not exposed over HTTP.** The controller passes `Map.of()`
-  for options (`ObfuscationController`), so a REST caller cannot set keep rules.
-  The step contract supports it and tests cover it.
+- **`keepMethods` is validated in `KeepNames`, not the controller.** Both
+  endpoints accept a repeatable `keepMethods` multipart param, which
+  `joinKeepRules(...)` joins into the `keepMethods` option. `KeepNames.parse`
+  rejects malformed rules (whitespace inside a rule, more than one `#`, or an
+  empty owner/method) by throwing `ObfuscationException`, which surfaces as the
+  usual 422 problem detail. The step contract still supports setting rules
+  directly via options.
 
 ## Invariants that are easy to break
 

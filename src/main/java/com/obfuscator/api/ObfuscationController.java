@@ -38,9 +38,10 @@ public class ObfuscationController {
     public ObfuscationResponse submit(
             @RequestPart("file") MultipartFile file,
             @RequestParam(name = "format", defaultValue = "JVM_CLASS") ArtifactFormat format,
-            @RequestParam(name = "steps", defaultValue = "") List<String> steps) {
+            @RequestParam(name = "steps", defaultValue = "") List<String> steps,
+            @RequestParam(name = "keepMethods", defaultValue = "") List<String> keepMethods) {
 
-        return toResponse(run(file, format, steps));
+        return toResponse(run(file, format, steps, keepMethods));
     }
 
     /** Same pipeline as {@link #submit}, but streams the artifact bytes instead of base64 JSON. */
@@ -48,9 +49,10 @@ public class ObfuscationController {
     public ResponseEntity<byte[]> download(
             @RequestPart("file") MultipartFile file,
             @RequestParam(name = "format", defaultValue = "JVM_CLASS") ArtifactFormat format,
-            @RequestParam(name = "steps", defaultValue = "") List<String> steps) {
+            @RequestParam(name = "steps", defaultValue = "") List<String> steps,
+            @RequestParam(name = "keepMethods", defaultValue = "") List<String> keepMethods) {
 
-        ObfuscationResult result = run(file, format, steps);
+        ObfuscationResult result = run(file, format, steps, keepMethods);
         Artifact output = result.output();
 
         HttpHeaders headers = new HttpHeaders();
@@ -65,9 +67,16 @@ public class ObfuscationController {
         return ResponseEntity.ok().headers(headers).body(output.bytes());
     }
 
-    private ObfuscationResult run(MultipartFile file, ArtifactFormat format, List<String> steps) {
-        ObfuscationRequest request = new ObfuscationRequest(Artifact.of(format, readBytes(file)), steps, Map.of());
+    private ObfuscationResult run(
+            MultipartFile file, ArtifactFormat format, List<String> steps, List<String> keepMethods) {
+        ObfuscationRequest request = new ObfuscationRequest(
+                Artifact.of(format, readBytes(file)), steps, joinKeepRules(keepMethods));
         return service.obfuscate(request);
+    }
+
+    private static Map<String, String> joinKeepRules(List<String> keepMethods) {
+        String joined = String.join(",", keepMethods);
+        return joined.isBlank() ? Map.of() : Map.of("keepMethods", joined);
     }
 
     private static MediaType mediaTypeOf(ArtifactFormat format) {
